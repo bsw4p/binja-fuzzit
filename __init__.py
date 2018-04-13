@@ -8,7 +8,7 @@ max_len = 512
 llvm_fuzzer_func = "int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)"
 afl_fuzzer_func  =  "int main(int argc, char *argv[])"
 
-afl_fuzzer_loop = "while (__AFL_LOOP(1000))"
+afl_fuzzer_loop = "while (1)"
 afl_fuzzer_loop_init = """
     char Buf[{max_len}];
     char* Data = NULL;
@@ -235,6 +235,7 @@ def get_type_for_function(function):
             "__stack_chk_fail", 
             "strcmp", 
             "strcpy", 
+	    "strlen",
             "__cxa_finalize",
             "deregister_tm_clones",
             "register_tm_clones",
