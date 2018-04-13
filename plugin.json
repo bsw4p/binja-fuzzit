@@ -1,0 +1,14 @@
+{
+	"plugin": {
+		"name": "libfuzzthis",
+		"type": ["ui"],
+		"api": "python2",
+		"description": "Create a libfuzzer test harness out of binary exports",
+		"longdescription": "TODO",
+		"license": {
+			"name": "MIT"
+		},
+		"version": "0.0.1",
+		"author": "Benedikt Schmotzle"
+	}
+}
