@@ -5,32 +5,32 @@ import getpass
 bitsize = 32 
 max_len = 512
 
-llvm_fuzzer_func = "int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)"
 afl_fuzzer_func  =  "int main(int argc, char *argv[])"
 
-afl_fuzzer_loop = "while (1)"
+afl_fuzzer_loop = "do"
+afl_fuzzer_loop_end = "while(Size > 0);"
 afl_fuzzer_loop_init = """
-    char Buf[{max_len}];
+    int BufSize = {max_len};
+    char Buf[BufSize];
     char* Data = NULL;
-    int Size = {max_len};
+    int Size = BufSize;
 """.format(max_len=max_len)
 
 afl_fuzzer_loop_load = """
-        /* Reset state. */
-        memset(Buf, 0, {max_len});
+    /* Reset state. */
+    memset(Buf, 0, BufSize);
 
-        /* Read input data. */
-        read(0, Buf, {max_len});
-        Data = &Buf[0];
+    /* Read input data. */
+    Size = read(0, Buf, BufSize);
+    Data = &Buf[0];
 """.format(max_len=max_len)
 
-
-llvm_fuzzer_loop = "while ( 1 )"
 
 fuzzer_func = afl_fuzzer_func
 fuzzer_loop = afl_fuzzer_loop
 fuzzer_loop_init = afl_fuzzer_loop_init
 fuzzer_loop_load = afl_fuzzer_loop_load
+fuzzer_loop_end = afl_fuzzer_loop_end
 
 template = """
 #include <stdio.h>
@@ -93,11 +93,11 @@ void ResolveSymbols()
     }}
 
     uint8_t choice = 0;
+    {fuzzer_loop_load}
 
     {fuzzer_loop}
     {{
 
-        {fuzzer_loop_load}
 
         if ( Size < sizeof(choice) ) 
         {{
@@ -113,7 +113,8 @@ void ResolveSymbols()
             {choices}
         }}
 
-    }}
+    }}{fuzzer_loop_end}
+    
 
     return 0;
 }}
@@ -157,7 +158,12 @@ class Function():
             if not ("*" in str(parameter.type)):
                 tmp_type = binja_type_to_c_type(str(parameter.type))
                 tmp_type_size = get_c_type_byte_size(tmp_type)
-                localVars.append("%s l_%s; memcpy(&l_%s, Data+(%s), sizeof(%s));" %(tmp_type, lvaridx, lvaridx, " + ".join(idx), tmp_type))
+                localVars.append("""
+                if(Size < 4){
+                    // not enough bytes in buffer
+                    return 0;
+                }
+                %s l_%s; memcpy(&l_%s, Data+(%s), sizeof(%s));""" %(tmp_type, lvaridx, lvaridx, " + ".join(idx), tmp_type))
                 args.append("l_%s" % lvaridx)
                 lvaridx += 1
 
@@ -165,6 +171,10 @@ class Function():
                 idx.append(str(tmp_type_size))
             else:
                 localVars.append("""
+                if(Size < 4){
+                    //not enough bytes in buffer
+                    return 0;
+                }
                 unsigned int strlen_%s; memcpy(&strlen_%s, Data+(%s), sizeof(int));
                 if(strlen_%s > Size){
                         //not enough bytes in buffer
@@ -180,24 +190,21 @@ class Function():
                 """ % (lvaridx, lvaridx, " + ".join(idx), lvaridx, lvaridx, lvaridx, lvaridx, lvaridx, " + ".join(idx), lvaridx, lvaridx, lvaridx))
                 args.append("tmpbuf_%s" % lvaridx)
                 frees.append("free(tmpbuf_%s);" %(lvaridx));
-                lvaridx += 1
-                minbufsize += 5 
+                minbufsize += 4
                 idx.append("4")
                 idx.append("strlen_%s" % (lvaridx))
+                lvaridx += 1
 
         return """
            case {number}:
-                if( Size < ({idx}) ){{
-                    //printf("not enough buffer space.\\n");
-                    return 0;
-                }}
+
                 {localVars}
                 {function}({args});
-                Data += Size;
-                Size -= Size;
+                Data += ({idx});
+                Size -= ({idx});
                 {frees}
                 break;
-        """.format(idx=minbufsize, localVars=" ".join(localVars), number=number, function=self._name, args=", ".join(args), frees=" ".join(frees))
+        """.format(idx=" + ".join(idx), localVars=" ".join(localVars), number=number, function=self._name, args=", ".join(args), frees=" ".join(frees))
 
 def get_c_type_byte_size(c_type):
     mapping = {"long long int":8, "int":4, "unsigned int":4, "void":4, "short":2, "char":1}
@@ -210,7 +217,7 @@ def get_c_type_byte_size(c_type):
 def binja_type_to_c_type(binja_type):
     if len(binja_type.split()) > 1:
         return " ".join( map(binja_type_to_c_type, binja_type.split()))
-    mapping = { "int64_t":"long long int", "int32_t":"int", "uint32_t":"unsigned int", "void":"void", "char":"char", "int16_t":"short int", "const":"const" }
+    mapping = { "uint64_t":"long long int", "int64_t":"long long int", "int32_t":"int", "uint32_t":"unsigned int", "void":"void", "char":"char", "int16_t":"short int", "const":"const" }
 
     has_pointer = ""
     if "*" in binja_type:
@@ -269,6 +276,7 @@ def write_template(libname, f_types):
                 libname=libname,
                 max_len=max_len,
                 fuzzer_loop=fuzzer_loop,
+                fuzzer_loop_end=fuzzer_loop_end,
                 fuzzer_loop_init=fuzzer_loop_init,
                 fuzzer_loop_load=fuzzer_loop_load,
                 fuzzer_func=fuzzer_func,
