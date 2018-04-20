@@ -123,3 +123,7 @@ python -c 'print("\x00"*512)' > in/0
 ```
 
 7. Run AFL with command ```LD_LIBRARY_PATH=. AFL_INST_LIBS=1 AFL_NO_FORKSRV=1 ~/afl-2.52b/afl-fuzz -Q -iin -oout --  ./harness```
+
+## Thanks!
+
+Thank you Guido Vranken (https://guidovranken.com/, https://github.com/guidovranken) and hugsy (https://blahcat.github.io/, https://github.com/hugsy) for the inspiration, Vector 35 (http://vector35.com/, https://github.com/Vector35/) for BinaryNinja and of course Michał Zalewski (http://lcamtuf.coredump.cx/) for AFL.
