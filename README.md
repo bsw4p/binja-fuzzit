@@ -50,4 +50,76 @@ int integer_overflow(int size, char *input){
 
 4. Compile harness.c using ```gcc -ldl harness.c -o harness``` 
 
-5. Run AFL with command ```AFL_INST_LIBS=1 AFL_NO_FORKSRV=1 ~/afl-2.52b/afl-fuzz -Q -iin -oout --  ./harness```
+5. Test harness manually
+
+Trigger buffer overflow:
+```python
+payload = [
+        # trigger init()
+        "\x00",
+        # trigger buffer overflow
+        "\x01",
+        # string size
+        "\xff\x00\x00\x00",
+        # string
+        "A"*0xff
+]
+
+print("".join(payload))
+```
+
+```bash
+python trigger_bufferoverflow.py | LD_LIBRARY_PATH=. ./harness
+```
+
+Trigger keyword buffer overflow:
+```python
+payload = [
+        # trigger keyword buffer overflow
+        "\x02",
+        # keyword string size
+        "\x02\x00\x00\x00",
+        # keyword string
+        "kw",
+        # string size
+        "\xff\x00\x00\x00",
+        "A"*0xff
+]
+
+
+print("".join(payload))
+```
+
+```bash
+python trigger_keywordbufferoverflow.py | LD_LIBRARY_PATH=. ./harness
+```
+
+
+Trigger size buffer overflow:
+```python
+payload = [
+        # trigger integer_overflow()
+        "\x03",
+        # integer size
+        "\x01\x00\x00\x00",
+        # string size
+        "\xff\x00\x00\x00",
+        # string
+        "A"*0xff
+
+]
+
+print("".join(payload))
+```
+
+```bash
+python trigger_sizebufferoverflow.py | LD_LIBRARY_PATH=. ./harness
+```
+
+6. Setup AFL
+```bash
+mkdir in
+python -c 'print("\x00"*512)' > in/0
+```
+
+7. Run AFL with command ```LD_LIBRARY_PATH=. AFL_INST_LIBS=1 AFL_NO_FORKSRV=1 ~/afl-2.52b/afl-fuzz -Q -iin -oout --  ./harness```
